@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PGPWeb</title>
+    <link href="bootstrap.min.css" rel="stylesheet">
+	</head>
+	<body>
+	<br />
+  	<div class="container">
+	  	<div class="row justify-content-center">
+			<div class="col-xs-12 col-md-10 col-xl-8">
+				<h1>PGPWeb</h1>
+			</div>
+		</div>
+
+		<div class="row justify-content-center">
+			<div class="col-xs-12 col-md-10 col-xl-8">
+
+            <br />
+            <div class="card" style="background-color:#D3EAFF">
+                <div class="card-body">
+                <h3>Your credentials</h3>
+                <div class="mb-3">
+                    <label class="form-label">Public key</label>
+                    <textarea id="publickey" class="form-control"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Private key</label>
+                    <textarea id="privatekey" class="form-control"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Private key passphrase</label>
+                    <input id="passphrase" name="passphrase" type="password" class="form-control">
+                </div>
+                <a id="clear" href="">clear credentials</a>
+            </div>
+            </div>
+
+			<br />
+			<div class="card" style="background-color:#F7E0CA">
+  			<div class="card-body">
+                <h3>Encrypt</h3>
+                <div class="mb-3">
+                    <label class="form-label">Recipient's Public key</label>
+                    <textarea id="recipient_publickey" class="form-control"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Message to encrypt</label>
+                    <textarea id="message_to_encrypt" class="form-control autoresize"></textarea>
+                </div>	
+                <div class="mb-3">
+                    <button id="encrypt" style="width:100%" class="btn btn-danger btn-lg">Encrypt</button>
+                </div>
+			</div>
+			</div>
+
+			<br />
+			<div class="card" style="background-color:#D6F1DF">
+  			<div class="card-body">
+                <h3>Decrypt</h3>
+                <div class="mb-3">
+                    <label class="form-label">Message to decrypt</label>
+                    <textarea id="message_to_decrypt" class="form-control autoresize"></textarea>
+                </div>	
+                <div class="mb-3">
+                    <button id="decrypt" style="width:100%" class="btn btn-success btn-lg">Decrypt</button>
+                </div>
+			</div>
+			</div>
+ 	 	</div>
+	</div>
+
+	<br />
+
+	<script src="jquery-3.6.1.min.js"></script>
+    <script src="bootstrap.bundle.min.js"></script>
+    <script src="openpgp.min.js"></script>
+	<script>
+
+        $("#publickey").val(localStorage.getItem("publickey"));
+        $("#privatekey").val(localStorage.getItem("privatekey"));
+
+        $(".autoresize").each(function () {
+            this.setAttribute("style", "height:" + (this.scrollHeight) + "px;overflow-y:hidden;");
+        });
+        
+        $(".autoresize").on("input", function () {
+            this.style.height = 0;
+            this.style.height = (this.scrollHeight) + "px";
+        });
+
+        $(".form-control").on("input", function (elem) {
+            $(this).removeClass("is-invalid");
+        });
+
+        $("#publickey").on("input", () => {
+            localStorage.setItem("publickey", $("#publickey").val());
+            return false;
+        });
+
+        $("#privatekey").on("input", () => {
+            localStorage.setItem("privatekey", $("#privatekey").val());
+            return false;
+        });
+
+        $("#clear").on("click", () => {
+            var res = confirm("Are you sure?");
+            if(res) {
+                $("#privatekey").val("");
+                $("#publickey").val("");
+                localStorage.setItem("privatekey", "");
+                localStorage.setItem("publickey", "");
+            }
+            return false;
+        });
+
+        function Encrypt() {
+            (async () => {
+                try {
+                    const publicKeyArmored = $("#recipient_publickey").val();
+                    const privateKeyArmored = $("#privatekey").val();
+                    const messageToEncrypt = $("#message_to_encrypt").val();
+                    const passphrase = $("#passphrase").val();
+
+                    if(!publicKeyArmored) {
+                        $("#recipient_publickey").focus();
+                        $("#recipient_publickey").addClass("is-invalid");
+                        return;
+                    }
+
+                    if(!privateKeyArmored) {
+                        $("#privatekey").focus();
+                        $("#privatekey").addClass("is-invalid");
+                        return;
+                    }
+
+                    if(!passphrase) {
+                        $("#passphrase").focus();
+                        $("#passphrase").addClass("is-invalid");
+                        return;
+                    }
+
+                    if(!messageToEncrypt) {
+                        $("#message_to_encrypt").focus();
+                        $("#message_to_encrypt").addClass("is-invalid");
+                        return;
+                    }
+
+                    const publicKey = await openpgp.readKey({ armoredKey: publicKeyArmored });
+
+                    const privateKey = await openpgp.decryptKey({
+                        privateKey: await openpgp.readPrivateKey({ armoredKey: privateKeyArmored }),
+                        passphrase
+                    });
+
+                    const encrypted = await openpgp.encrypt({
+                        message: await openpgp.createMessage({ text: messageToEncrypt }),
+                        encryptionKeys: publicKey,
+                        signingKeys: privateKey
+                    });
+
+                    $("#message_to_encrypt").val(encrypted);
+
+                    const field = document.querySelector("#message_to_encrypt");
+                    field.dispatchEvent(new Event("input"));       
+                } catch (error) {
+                    alert(error);
+                }
+
+            })();
+        }
+
+        function Decrypt() {
+            (async () => {
+                try {
+                    const privateKeyArmored = $("#privatekey").val();
+                    const messageToDecrypt = $("#message_to_decrypt").val();
+                    const passphrase = $("#passphrase").val();
+                    
+                    if(!privateKeyArmored) {
+                        $("#privatekey").focus();
+                        $("#privatekey").addClass("is-invalid");
+                        return;
+                    }
+
+                    if(!passphrase) {
+                        $("#passphrase").focus();
+                        $("#passphrase").addClass("is-invalid");
+                        return;
+                    }
+
+                    if(!messageToDecrypt) {
+                        $("#message_to_decrypt").focus();
+                        $("#message_to_decrypt").addClass("is-invalid");
+                        return;
+                    }
+
+                    const privateKey = await openpgp.decryptKey({
+                        privateKey: await openpgp.readPrivateKey({ armoredKey: privateKeyArmored }),
+                        passphrase
+                    });
+
+                    const message = await openpgp.readMessage({
+                        armoredMessage: messageToDecrypt
+                    });
+                    const { data: decrypted, signatures } = await openpgp.decrypt({
+                        message,
+                        decryptionKeys: privateKey
+                    });
+
+                    $("#message_to_decrypt").val(decrypted);
+
+                    const field = document.querySelector("#message_to_decrypt");
+                    field.dispatchEvent(new Event("input"));
+                } catch (error) {
+                    alert(error);
+                }
+            })();
+        }
+
+        $("#decrypt").on("click", () => {
+            Decrypt();
+            return false;
+        });
+
+        $("#encrypt").on("click", () => {
+            Encrypt();
+            return false;
+        });
+
+	</script>
+	</body>
+</html>
+
+
+
